@@ -1,10 +1,13 @@
 numpy
 -f https://download.pytorch.org/whl/torch_stable.html
 #torch==1.6.0+cu101
-torch==2.0.1+cu117
+#torch==2.0.1+cu117
 -f https://download.pytorch.org/whl/torch_stable.html
 #torchvision==0.7.0+cu101
-torchvision>=0.2.0.1
+#torchvision>=0.2.0.1
+#torchvision==0.17.2
+torch==2.2.2
+torchvision==0.17.2
 opencv-python
 #onnx==1.9.0
 onnx
@@ -17,3 +20,7 @@ requests==2.25.1
 kornia==0.5.4
 dill
 wandb
+
+# add
+ipykernel
+jupyter
