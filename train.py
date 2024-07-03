@@ -30,7 +30,8 @@ from arcface_model.iresnet import iresnet100
 
 print("finished imports")
 
-
+"""
+Original
 def train_one_epoch(G: 'generator model', 
                     D: 'discriminator model', 
                     opt_G: "generator opt", 
@@ -44,6 +45,25 @@ def train_one_epoch(G: 'generator model',
                     device: 'torch device',
                     epoch:int,
                     loss_adv_accumulated:int):
+"""
+
+def train_one_epoch(G: AEI_Net, 
+                    D: MultiscaleDiscriminator, 
+                    opt_G: torch.optim.Optimizer, 
+                    opt_D: torch.optim.Optimizer,
+                    scheduler_G: torch.optim.lr_scheduler._LRScheduler,
+                    scheduler_D: torch.optim.lr_scheduler._LRScheduler,
+                    netArc: iresnet100,
+                    model_ft: LandmarkDetector,
+                    args: argparse.Namespace,
+                    dataloader: torch.utils.data.DataLoader,
+                    device: torch.device,
+                    epoch: int,
+                    loss_adv_accumulated: int):
+    """
+    Train the models for one epoch
+    一つのエポックの間モデルをトレーニングする
+    """
     
     for iteration, data in enumerate(dataloader):
         start_time = time.time()
@@ -56,6 +76,7 @@ def train_one_epoch(G: 'generator model',
         same_person = same_person.to(device)
 
         # get the identity embeddings of Xs
+        # Xsのアイデンティティ埋め込みを取得する
         with torch.no_grad():
             embed = netArc(F.interpolate(Xs_orig, [112, 112], mode='bilinear', align_corners=False))
 
@@ -65,6 +86,7 @@ def train_one_epoch(G: 'generator model',
             same_person = diff_person
     
         # generator training
+        # ジェネレータのトレーニング
         opt_G.zero_grad()
         
         Y, Xt_attr = G(Xt, embed)
@@ -78,10 +100,12 @@ def train_one_epoch(G: 'generator model',
         else:
             eye_heatmaps = None
             
+        # ジェネレータの損失を計算
         lossG, loss_adv_accumulated, L_adv, L_attr, L_id, L_rec, L_l2_eyes = compute_generator_losses(G, Y, Xt, Xt_attr, Di,
                                                                              embed, ZY, eye_heatmaps,loss_adv_accumulated, 
                                                                              diff_person, same_person, args)
         
+        # 損失をスケールしてバックプロパゲーション
         with amp.scale_loss(lossG, opt_G) as scaled_loss:
             scaled_loss.backward()
         opt_G.step()
@@ -89,6 +113,7 @@ def train_one_epoch(G: 'generator model',
             scheduler_G.step()
         
         # discriminator training
+        # ディスクリミネータのトレーニング
         opt_D.zero_grad()
         lossD = compute_discriminator_loss(D, Y, Xs, diff_person)
         with amp.scale_loss(lossD, opt_D) as scaled_loss:
@@ -102,6 +127,7 @@ def train_one_epoch(G: 'generator model',
         
         batch_time = time.time() - start_time
 
+        # 生成された画像を表示または保存
         if iteration % args.show_step == 0:
             images = [Xs, Xt, Y]
             if args.eye_detector_loss:
@@ -114,6 +140,7 @@ def train_one_epoch(G: 'generator model',
             else:
                 cv2.imwrite('./images/generated_image.jpg', image[:,:,::-1])
         
+        # 損失とトレーニング時間を出力
         if iteration % 10 == 0:
             print(f'epoch: {epoch}    {iteration} / {len(dataloader)}')
             print(f'lossD: {lossD.item()}    lossG: {lossG.item()} batch_time: {batch_time}s')
@@ -124,6 +151,7 @@ def train_one_epoch(G: 'generator model',
             if args.scheduler:
                 print(f'scheduler_G lr: {scheduler_G.get_last_lr()} scheduler_D lr: {scheduler_D.get_last_lr()}')
         
+        # 損失をWandBにログ
         if args.use_wandb:
             if args.eye_detector_loss:
                 wandb.log({"loss_eyes": L_l2_eyes.item()}, commit=False)
@@ -134,6 +162,7 @@ def train_one_epoch(G: 'generator model',
                        "loss_attr": L_attr.item(),
                        "loss_rec": L_rec.item()})
         
+        # モデルの状態を保存
         if iteration % 5000 == 0:
             torch.save(G.state_dict(), f'./saved_models_{args.run_name}/G_latest.pth')
             torch.save(D.state_dict(), f'./saved_models_{args.run_name}/D_latest.pth')
@@ -141,8 +170,8 @@ def train_one_epoch(G: 'generator model',
             torch.save(G.state_dict(), f'./current_models_{args.run_name}/G_' + str(epoch)+ '_' + f"{iteration:06}" + '.pth')
             torch.save(D.state_dict(), f'./current_models_{args.run_name}/D_' + str(epoch)+ '_' + f"{iteration:06}" + '.pth')
 
+        # 特定のステップでフェイススワップの結果を表示
         if (iteration % 250 == 0) and (args.use_wandb):
-            ### Посмотрим как выглядит свап на трех конкретных фотках, чтобы проследить динамику
             G.eval()
 
             res1 = get_faceswap('examples/images/training//source1.png', 'examples/images/training//target1.png', G, netArc, device)
@@ -164,17 +193,24 @@ def train_one_epoch(G: 'generator model',
 
 
 def train(args, device):
+    """
+    Train the models
+    モデルをトレーニングする
+    """
     # training params
+    # トレーニングパラメータ
     batch_size = args.batch_size
     max_epoch = args.max_epoch
     
     # initializing main models
+    # メインモデルの初期化
     G = AEI_Net(args.backbone, num_blocks=args.num_blocks, c_id=512).to(device)
     D = MultiscaleDiscriminator(input_nc=3, n_layers=5, norm_layer=torch.nn.InstanceNorm2d).to(device)
     G.train()
     D.train()
     
     # initializing model for identity extraction
+    # アイデンティティ抽出モデルの初期化
     netArc = iresnet100(fp16=False)
     netArc.load_state_dict(torch.load('arcface_model/backbone.pth'))
     netArc=netArc.cuda()
@@ -188,15 +224,15 @@ def train(args, device):
         else:
             pretrained_weights = checkpoint['state_dict']
             model_weights = model_ft.state_dict()
-            pretrained_weights = {k: v for k, v in pretrained_weights.items() \
-                                  if k in model_weights}
+            pretrained_weights = {k: v for k, v in pretrained_weights.items() if k in model_weights}
             model_weights.update(pretrained_weights)
             model_ft.load_state_dict(model_weights)
         model_ft = model_ft.to(device)
         model_ft.eval()
     else:
-        model_ft=None
+        model_ft = None
     
+    # オプティマイザの初期化
     opt_G = optim.Adam(G.parameters(), lr=args.lr_G, betas=(0, 0.999), weight_decay=1e-4)
     opt_D = optim.Adam(D.parameters(), lr=args.lr_D, betas=(0, 0.999), weight_decay=1e-4)
 
@@ -210,6 +246,7 @@ def train(args, device):
         scheduler_G = None
         scheduler_D = None
         
+    # 事前トレーニングされた重みをロード
     if args.pretrained:
         try:
             G.load_state_dict(torch.load(args.G_path, map_location=torch.device('cpu')), strict=False)
@@ -218,6 +255,7 @@ def train(args, device):
         except FileNotFoundError as e:
             print("Not found pretrained weights. Continue without any pretrained weights.")
     
+    # データセットの選択
     if args.vgg:
         dataset = FaceEmbedVGG2(args.dataset_path, same_prob=args.same_person, same_identity=args.same_identity)
     else:
@@ -225,9 +263,11 @@ def train(args, device):
         
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, drop_last=True)
 
-    # Будем считать аккумулированный adv loss, чтобы обучать дискриминатор только когда он ниже порога, если discr_force=True
+    # Accumulated adversarial loss for training discriminator only when below threshold
+    # 一定の閾値以下の時にのみディスクリミネータをトレーニングするための累積敵対的損失
     loss_adv_accumulated = 20.
     
+    # エポックごとにトレーニングを実行
     for epoch in range(0, max_epoch):
         train_one_epoch(G,
                         D,
@@ -244,11 +284,15 @@ def train(args, device):
                         loss_adv_accumulated)
 
 def main(args):
+    """
+    Main function to start training
+    トレーニングを開始するメイン関数
+    """
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if not torch.cuda.is_available():
         print('cuda is not available. using cpu. check if it\'s ok')
     
-    print("Starting traing")
+    print("Starting training")
     train(args, device=device)
 
     
@@ -256,49 +300,89 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     # dataset params
+    # データセットパラメータ
     parser.add_argument('--dataset_path', default='/VggFace2-crop/', help='Path to the dataset. If not VGG2 dataset is used, param --vgg should be set False')
+    # データセットへのパス。VGG2データセットを使用しない場合、--vggパラメータをFalseに設定する必要があります。
     parser.add_argument('--G_path', default='./saved_models/G.pth', help='Path to pretrained weights for G. Only used if pretrained=True')
+    # Gの事前学習済み重みのパス。pretrained=Trueの場合にのみ使用されます。
     parser.add_argument('--D_path', default='./saved_models/D.pth', help='Path to pretrained weights for D. Only used if pretrained=True')
+    # Dの事前学習済み重みのパス。pretrained=Trueの場合にのみ使用されます。
     parser.add_argument('--vgg', default=True, type=bool, help='When using VGG2 dataset (or any other dataset with several photos for one identity)')
-    # weights for loss
-    parser.add_argument('--weight_adv', default=1, type=float, help='Adversarial Loss weight')
-    parser.add_argument('--weight_attr', default=10, type=float, help='Attributes weight')
-    parser.add_argument('--weight_id', default=20, type=float, help='Identity Loss weight')
-    parser.add_argument('--weight_rec', default=10, type=float, help='Reconstruction Loss weight')
-    parser.add_argument('--weight_eyes', default=0., type=float, help='Eyes Loss weight')
-    # training params you may want to change
+    # VGG2データセット（または同一人物の複数の写真がある他のデータセット）を使用する場合にTrueに設定します。
     
+    # weights for loss
+    # 損失の重み
+    parser.add_argument('--weight_adv', default=1, type=float, help='Adversarial Loss weight')
+    # 敵対的損失の重み
+    parser.add_argument('--weight_attr', default=10, type=float, help='Attributes weight')
+    # 属性損失の重み
+    parser.add_argument('--weight_id', default=20, type=float, help='Identity Loss weight')
+    # アイデンティティ損失の重み
+    parser.add_argument('--weight_rec', default=10, type=float, help='Reconstruction Loss weight')
+    # 再構成損失の重み
+    parser.add_argument('--weight_eyes', default=0., type=float, help='Eyes Loss weight')
+    # 目の損失の重み
+
+    # training params you may want to change
+    # 変更する可能性があるトレーニングパラメータ
     parser.add_argument('--backbone', default='unet', const='unet', nargs='?', choices=['unet', 'linknet', 'resnet'], help='Backbone for attribute encoder')
+    # 属性エンコーダのバックボーン
     parser.add_argument('--num_blocks', default=2, type=int, help='Numbers of AddBlocks at AddResblock')
+    # AddResblockでのAddBlocksの数
     parser.add_argument('--same_person', default=0.2, type=float, help='Probability of using same person identity during training')
+    # トレーニング中に同一人物のアイデンティティを使用する確率
     parser.add_argument('--same_identity', default=True, type=bool, help='Using simswap approach, when source_id = target_id. Only possible with vgg=True')
+    # ソースIDとターゲットIDが同じ場合にsimswapアプローチを使用する。vgg=Trueの場合にのみ可能
     parser.add_argument('--diff_eq_same', default=False, type=bool, help='Don\'t use info about where is defferent identities')
+    # 異なるアイデンティティの情報を使用しない
     parser.add_argument('--pretrained', default=True, type=bool, help='If using the pretrained weights for training or not')
+    # トレーニングに事前学習済み重みを使用するかどうか
     parser.add_argument('--discr_force', default=False, type=bool, help='If True Discriminator would not train when adversarial loss is high')
+    # Trueの場合、敵対的損失が高いときにディスクリミネータをトレーニングしない
     parser.add_argument('--scheduler', default=False, type=bool, help='If True decreasing LR is used for learning of generator and discriminator')
+    # Trueの場合、ジェネレータとディスクリミネータの学習に減少する学習率を使用する
     parser.add_argument('--scheduler_step', default=5000, type=int)
+    # スケジューラのステップサイズ
     parser.add_argument('--scheduler_gamma', default=0.2, type=float, help='It is value, which shows how many times to decrease LR')
+    # 学習率をどれだけ減少させるかを示す値
     parser.add_argument('--eye_detector_loss', default=False, type=bool, help='If True eye loss with using AdaptiveWingLoss detector is applied to generator')
+    # Trueの場合、AdaptiveWingLoss検出器を使用してジェネレータに目の損失を適用する
+
     # info about this run
+    # この実行に関する情報
     parser.add_argument('--use_wandb', default=False, type=bool, help='Use wandb to track your experiments or not')
+    # wandbを使用して実験を追跡するかどうか
     parser.add_argument('--run_name', required=True, type=str, help='Name of this run. Used to create folders where to save the weights.')
+    # この実行の名前。重みを保存するフォルダの作成に使用されます。
     parser.add_argument('--wandb_project', default='your-project-name', type=str)
+    # wandbプロジェクトの名前
     parser.add_argument('--wandb_entity', default='your-login', type=str)
+    # wandbのエンティティ（ログイン名）
+
     # training params you probably don't want to change
+    # 変更しない可能性が高いトレーニングパラメータ
     parser.add_argument('--batch_size', default=16, type=int)
+    # バッチサイズ
     parser.add_argument('--lr_G', default=4e-4, type=float)
+    # ジェネレータの学習率
     parser.add_argument('--lr_D', default=4e-4, type=float)
+    # ディスクリミネータの学習率
     parser.add_argument('--max_epoch', default=2000, type=int)
+    # 最大エポック数
     parser.add_argument('--show_step', default=500, type=int)
+    # 結果を表示するステップ数
     parser.add_argument('--save_epoch', default=1, type=int)
+    # モデルを保存するエポック数
     parser.add_argument('--optim_level', default='O2', type=str)
+    # 最適化レベル
 
     args = parser.parse_args()
     
-    if args.vgg==False and args.same_identity==True:
+    if args.vgg == False and args.same_identity == True:
         raise ValueError("Sorry, you can't use some other dataset than VGG2 Faces with param same_identity=True")
+    # vggがFalseでsame_identityがTrueの場合、VGG2 Faces以外のデータセットを使用することはできません
     
-    if args.use_wandb==True:
+    if args.use_wandb == True:
         wandb.init(project=args.wandb_project, entity=args.wandb_entity, settings=wandb.Settings(start_method='fork'))
 
         config = wandb.config
@@ -327,7 +411,7 @@ if __name__ == "__main__":
     elif not os.path.exists('./images'):
         os.mkdir('./images')
     
-    # Создаем папки, чтобы было куда сохранять последние веса моделей, а также веса с каждой эпохи
+    # モデルの最新の重みを保存するためのフォルダを作成
     if not os.path.exists(f'./saved_models_{args.run_name}'):
         os.mkdir(f'./saved_models_{args.run_name}')
         os.mkdir(f'./current_models_{args.run_name}')
