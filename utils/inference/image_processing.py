@@ -98,6 +98,39 @@ def get_final_image(final_frames: List[np.ndarray],
     final = np.array(final, dtype='uint8')
     return final
 
+def get_only_swaped_image(final_frames: List[np.ndarray],
+                          crop_frames: List[np.ndarray],
+                          full_frame: np.ndarray,
+                          tfm_arrays: List[np.ndarray]):
+    """
+    フェイススワッピングや他の画像変換の結果を用いて最終的な画像を生成する
+
+    Args:
+    final_frames (List[np.ndarray]): 最終的に生成されたフレームのリスト
+    full_frame (np.ndarray): フルサイズの元のフレーム
+    tfm_arrays (List[np.ndarray]): 各フレームに適用された変換行列のリスト
+    """
+
+    # フルサイズの元のフレームのコピーを作成
+    final = full_frame.copy()
+    
+    # 各フレームについてループ
+    for i in range(len(final_frames)):
+        # 224x224ピクセルにリサイズされたフレームを取得
+        frame = cv2.resize(final_frames[i][0], (224, 224))
+        
+        # 変換行列を反転
+        mat_rev = cv2.invertAffineTransform(tfm_arrays[i][0])
+
+        # リサイズされたフレームとマスクを元のフルサイズのフレームに再変換
+        swap_t = cv2.warpAffine(frame, mat_rev, (full_frame.shape[1], full_frame.shape[0]), borderMode=cv2.BORDER_REPLICATE)
+
+        # マスクを使用して変換されたフレームを最終フレームに適用
+        final = swap_t
+    
+    # 最終フレームをuint8型の配列に変換し、関数の結果として返す
+    final = np.array(final, dtype='uint8')
+    return final
 
 def show_images(images: List[np.ndarray], 
                 titles=None, 
