@@ -31,8 +31,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('--path_to_dataset', default='./VggFace2/VGG-Face2/data/preprocess_train', type=str)
-    parser.add_argument('--save_path', default='./VggFace2-crop', type=str)
+    parser.add_argument('--path_to_dataset', default='./dataset/VGG-Face2/data/vggface2_train', type=str)
+    parser.add_argument('--save_path', default='./dataset/VGG-Face2-crop', type=str)
     
     args = parser.parse_args()
     
