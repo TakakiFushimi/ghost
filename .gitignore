@@ -31,6 +31,11 @@ arcface_model
 dataset/*
 !dataset/.gitkeep
 
+# log
+wandb
+saved_models_base
+current_models_base
+
 # Environments
 .venv
 .git

@@ -24,8 +24,8 @@ from network.MultiscaleDiscriminator import *
 from utils.training.Dataset import FaceEmbedVGG2, FaceEmbed
 from utils.training.image_processing import make_image_list, get_faceswap
 from utils.training.losses import hinge_loss, compute_discriminator_loss, compute_generator_losses
-from utils.training.detector import detect_landmarks, paint_eyes
-from AdaptiveWingLoss.core import models
+#from utils.training.detector import detect_landmarks, paint_eyes
+#from AdaptiveWingLoss.core import models
 from arcface_model.iresnet import iresnet100
 
 print("finished imports")
@@ -54,7 +54,7 @@ def train_one_epoch(G: AEI_Net,
                     scheduler_G: torch.optim.lr_scheduler._LRScheduler,
                     scheduler_D: torch.optim.lr_scheduler._LRScheduler,
                     netArc: iresnet100,
-                    model_ft: LandmarkDetector,
+                    model_ft ,
                     args: argparse.Namespace,
                     dataloader: torch.utils.data.DataLoader,
                     device: torch.device,
@@ -301,7 +301,7 @@ if __name__ == "__main__":
     
     # dataset params
     # データセットパラメータ
-    parser.add_argument('--dataset_path', default='/VggFace2-crop/', help='Path to the dataset. If not VGG2 dataset is used, param --vgg should be set False')
+    parser.add_argument('--dataset_path', default='./dataset/VGG-Face2-crop/', help='Path to the dataset. If not VGG2 dataset is used, param --vgg should be set False')
     # データセットへのパス。VGG2データセットを使用しない場合、--vggパラメータをFalseに設定する必要があります。
     parser.add_argument('--G_path', default='./saved_models/G.pth', help='Path to pretrained weights for G. Only used if pretrained=True')
     # Gの事前学習済み重みのパス。pretrained=Trueの場合にのみ使用されます。
@@ -316,7 +316,7 @@ if __name__ == "__main__":
     # 敵対的損失の重み
     parser.add_argument('--weight_attr', default=10, type=float, help='Attributes weight')
     # 属性損失の重み
-    parser.add_argument('--weight_id', default=20, type=float, help='Identity Loss weight')
+    parser.add_argument('--weight_id', default=15, type=float, help='Identity Loss weight')
     # アイデンティティ損失の重み
     parser.add_argument('--weight_rec', default=10, type=float, help='Reconstruction Loss weight')
     # 再構成損失の重み
@@ -335,7 +335,7 @@ if __name__ == "__main__":
     # ソースIDとターゲットIDが同じ場合にsimswapアプローチを使用する。vgg=Trueの場合にのみ可能
     parser.add_argument('--diff_eq_same', default=False, type=bool, help='Don\'t use info about where is defferent identities')
     # 異なるアイデンティティの情報を使用しない
-    parser.add_argument('--pretrained', default=True, type=bool, help='If using the pretrained weights for training or not')
+    parser.add_argument('--pretrained', default=False, type=bool, help='If using the pretrained weights for training or not')
     # トレーニングに事前学習済み重みを使用するかどうか
     parser.add_argument('--discr_force', default=False, type=bool, help='If True Discriminator would not train when adversarial loss is high')
     # Trueの場合、敵対的損失が高いときにディスクリミネータをトレーニングしない
@@ -350,13 +350,13 @@ if __name__ == "__main__":
 
     # info about this run
     # この実行に関する情報
-    parser.add_argument('--use_wandb', default=False, type=bool, help='Use wandb to track your experiments or not')
+    parser.add_argument('--use_wandb', default=True, type=bool, help='Use wandb to track your experiments or not')
     # wandbを使用して実験を追跡するかどうか
     parser.add_argument('--run_name', required=True, type=str, help='Name of this run. Used to create folders where to save the weights.')
     # この実行の名前。重みを保存するフォルダの作成に使用されます。
     parser.add_argument('--wandb_project', default='your-project-name', type=str)
     # wandbプロジェクトの名前
-    parser.add_argument('--wandb_entity', default='your-login', type=str)
+    parser.add_argument('--wandb_entity', default='fushissitakaki-japan', type=str)
     # wandbのエンティティ（ログイン名）
 
     # training params you probably don't want to change
